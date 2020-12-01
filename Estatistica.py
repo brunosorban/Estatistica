@@ -1,5 +1,6 @@
 import numpy as np
-from scipy.stats import norm, t, f, chi2
+from scipy import math
+from scipy.stats import norm, t, f, chi2, f_oneway
 class Stat:
     def __init__(self, A=None, B=None, alfa=0.05):
         self.A = A
@@ -219,14 +220,14 @@ class Stat:
             Zcalc = (cond - self.Xa) / np.sqrt(self.Va / self.Na)
             temp = norm.cdf(Zcalc)
 
-            print("Alfa = ", int(1000*(100 * (1 - temp)))/1000, "%")
+            print("Alfa = {:.3f}".format(100 * (1 - temp)), "%")
             return 1 - temp
 
         elif mode == "betaMedia":
             Zcalc = (cond - self.Xb) / np.sqrt(self.Vb / self.Nb)
             temp = norm.cdf(Zcalc)
 
-            print("Beta = ", int(1000*(100 * (temp)))/1000, "%")
+            print("Beta = {:.3f}".format(100 * temp), "%")
             return temp
 
         elif mode == "maiorProp":
@@ -243,3 +244,152 @@ class Stat:
 
         else:
             print("Erro de entrada")
+
+
+    def calculateTA(self, A, B):
+        temp = 0
+        N = 0
+        for i in range(len(A)):
+            temp += B[i] * A[i]
+            N += B[i]
+
+        return temp / N, N
+
+    def TA(self, A, B, mode = "poisson"):
+        '''Realiza um teste de aderência dadas as condições de entrada
+        Para o teste, A deve conter o número de trocas, defeitos, etc, e 
+        B deve conter quantas vezez essa troca ou defeito ocorreu. Note que 
+        é fundamental que haja compatibilidade perfeita entre as entradas'''
+
+        if len(A) != len(B): return print("Entradas incompatíveis")
+        X, N = self.calculateTA(A, B)
+
+        if mode == "poisson":
+            Oi = B
+            Chi2calc = 0
+            n = 0
+            Oiacc = 0
+            Eiacc = 0
+
+            # Generate the Expected number by the poisson model
+            for i in range(len(A)):
+                Eiacc += np.exp(-X) * X**A[i] / math.factorial(A[i]) * N
+                Oiacc += Oi[i]
+                
+                if i != (len(A)-1) and np.exp(-X) * X**A[i+1] / math.factorial(A[i+1]) * N >= 5:
+                    Chi2calc += (Oiacc - Eiacc)**2 / Eiacc
+                    n += 1
+                    Oiacc = 0
+                    Eiacc = 0
+
+            Chi2calc += (Oiacc - Eiacc)**2 / Eiacc
+            n += 1  
+                
+                
+            Chi2crit = chi2.ppf(1-self.alfa, n - 2)
+        
+            print("Chi2calc = ", int(1000 * Chi2calc) / 1000)
+            print("Chi2crit = ", int(1000 * Chi2crit) / 1000)
+            if Chi2calc < Chi2crit:
+                print("Aceito H0")
+                return True
+            else:
+                print("Rejeito H0")
+                return False
+
+    def AV(self, SQ1 = None, n1 = None, SQ2 = None, n2 = None,  SQR = None, SQT = None, QM1 = None, QM2 = None, QMR = None, QMT = None, mode = 'multiMedia'):
+        if mode == 'multiMedia':
+            gl1 = n1 - 1
+            glr = n1 * (n2-1)
+            glt = n1 * n2 - 1
+
+            if QM1:
+                SQ1 = QM1 * gl1
+            if QMR:
+                SQR = QMR * glr
+            if QMT:
+                SQT = QMT * glt
+            if not SQ1:
+                SQ1 = SQT - SQR
+            if not SQR:
+                SQR = SQT - SQ1
+            if not SQT:
+                SQT = SQ1 + SQR
+
+            QM1 = SQ1 / gl1
+            QMR = SQR / glr
+            QMT = SQT / glt
+
+            F1calc = QM1 / QMR
+            F1crit = f.ppf(1 - self.alfa, gl1, glr)
+            pVal = f.cdf(F1calc, gl1, glr)
+
+
+            print('| Fonte        SQ        gl          QM        F    Fcrit    pVal  |')
+            print('| Dado 1    {:.2f}     {:.0f}       {:.3f}   {:.3f}  {:.3f}  {:.5f} |'.format(SQ1, gl1, QM1, F1calc, F1crit, pVal))
+            print('| Residual  {:.2f}    {:.0f}      {:.3f} |'.format(SQR, glr, QMR))
+            print('| Total     {:.2f}    {:.0f}      {:.3f} |'.format(SQT, glt, QMT))
+            print()
+
+            if F1calc < F1crit:
+                print("Aceito H0, as médias são iguais")
+                return True
+            else:
+                print("Rejeito H0, as médias são diferentes")
+                return False
+
+
+        elif mode == 'doisFat':
+            gl1 = n1 - 1
+            gl2 = n2 - 1
+            glr = gl1 * gl2
+            glt = n1 * n2 - 1
+
+            if QM1:
+                SQ1 = QM1 * gl1
+            if QM2:
+                SQ2 = QM2 * gl2
+            if QMR:
+                SQR = QMR * glr
+            if QMT:
+                SQT = QMT * glt
+            if not SQ1:
+                SQ1 = SQT - SQR - SQ2
+            elif not SQ2:
+                SQ2 = SQT - SQR - SQ1
+            elif not SQR:
+                SQR = SQT - SQ1 - SQ2
+            elif not SQT:
+                SQT = SQ1 + SQ2 + SQR
+
+            QM1 = SQ1 / gl1
+            QM2 = SQ2 / gl2
+            QMR = SQR / glr
+            QMT = SQT / glt
+
+            F1calc = QM1 / QMR
+            F2calc = QM2 / QMR
+
+            F1crit = f.ppf(1 - self.alfa, gl1, glr)
+            F2crit = f.ppf(1 - self.alfa, gl2, glr)
+
+            print('| Fonte       SQ        gl        QM      F     Fcrit |')
+            print('| Dado 1    {:.2f}       {:.0f}       {:.3f}  {:.3f}  {:.3f} |'.format(SQ1, gl1, QM1, F1calc, F1crit))
+            print('| Dado 2    {:.2f}       {:.0f}       {:.3f}   {:.3f}   {:.3f} |'.format(SQ2, gl2, QM2, F2calc, F2crit))
+            print('| Residual  {:.2f}       {:.0f}      {:.3f} |'.format(SQR, glr, QMR))
+            print('| Total     {:.2f}      {:.0f}      {:.3f} |'.format(SQT, glt, QMT))
+            print()
+
+            if F1calc < F1crit:
+                print("Aceito H0.1, as médias de 1 são iguais")
+                R1 = True
+            else:
+                print("Rejeito H0.1, as médias de 1 são diferentes")
+                R1 = False
+            
+            if F2calc < F2crit:
+                print("Aceito H0.2, as médias de 2 são iguais")
+                return (R1, True)
+            else:
+                print("Rejeito H0.2, as médias de 2 são diferentes")
+                return (R1, False)
