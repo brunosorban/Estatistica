@@ -325,10 +325,14 @@ class Stat:
             pVal = f.cdf(F1calc, gl1, glr)
 
 
-            print('| Fonte        SQ        gl          QM        F    Fcrit    pVal  |')
-            print('| Dado 1    {:.2f}     {:.0f}       {:.3f}   {:.3f}  {:.3f}  {:.5f} |'.format(SQ1, gl1, QM1, F1calc, F1crit, pVal))
-            print('| Residual  {:.2f}    {:.0f}      {:.3f} |'.format(SQR, glr, QMR))
-            print('| Total     {:.2f}    {:.0f}      {:.3f} |'.format(SQT, glt, QMT))
+            print('| Fonte        SQ        gl          QM    |')
+            print('| Dado 1     {:.2f}     {:.0f}       {:.3f} |'.format(SQ1, gl1, QM1))
+            print('| Residual   {:.2f}    {:.0f}      {:.3f} |'.format(SQR, glr, QMR))
+            print('| Total      {:.2f}    {:.0f}      {:.3f} |'.format(SQT, glt, QMT))
+            print()
+            print("Fcalc = {:.3f}".format(F1calc))
+            print("Fcrit = {:.3f}".format(F1crit))
+            print("P-Valor = {:.3f}".format(pVal))
             print()
 
             if F1calc < F1crit:
@@ -393,3 +397,78 @@ class Stat:
             else:
                 print("Rejeito H0.2, as médias de 2 são diferentes")
                 return (R1, False)
+
+    def TC(self):
+        somaX = 0
+        somaY = 0
+        somaXY = 0
+        somaX2 = 0
+        somaY2 = 0
+        for i in range(len(self.A)):
+            somaX += self.A[i]
+            somaY += self.B[i]
+            somaXY += self.A[i] * self.B[i]
+            somaX2 += self.A[i]**2
+            somaY2 += self.B[i]**2
+        SXX = somaX2 - somaX**2 / self.Na
+        SYY = somaY2 - somaY**2 / self.Nb
+        SXY = somaXY - somaX * somaY / self.Na
+
+        r = SXY / np.sqrt(SXX * SYY)
+        R2 = r**2
+
+        print('r = {:.3f}'.format(r))
+        print('R² = {:.3f}'.format(R2))
+
+        tcalc = r * np.sqrt((self.Na - 2) / (1 - R2))
+        tcrit = t.ppf(1-self.alfa/2, self.Na - 2)
+
+        if abs(tcalc) > tcrit:
+            print("Rejeito H0, há correlação linear")
+            return False
+        else:
+            print("Aceito H0, não há correlação linear")
+            return True
+
+    def regressao(self, xEmAnalise, n=None, somaX=None, somaX2=None, somaY=None, somaY2=None, somaXY=None, mode = "previsao", Var = None):
+        X = somaX / n
+        Y = somaY / n
+        Sxx = somaX2 - somaX**2 / n
+        Sxy = somaXY - somaX * somaY / n
+        Syy = somaY2 - somaY**2 / n
+
+        b1 =  Sxy / Sxx
+        b0 = Y - b1 * X
+        if b0 > 0: print("Y = {:.3f}x + {:.3f}".format(b1, b0))
+        else: print("Y = {:.3f}X  {:.3f}".format(b1, b0))
+
+        if mode == "previsao":
+            varParcial = np.sqrt(1 + 1/n + (xEmAnalise - X)**2 / Sxx)
+        else:
+            varParcial = np.sqrt(1/n + (xEmAnalise - X)**2 / Sxx)
+
+        Sr = (Syy - b1 * Sxy) / (n-2)
+
+        # print(Sr)
+        # print(varParcial)
+        Tcrit = abs(t.ppf(self.alfa / 2, n-2))
+        # print("T = ", Tcrit)
+        YnoPonto = b0 + b1 * xEmAnalise
+        e0 = Tcrit * Sr * varParcial if not Var else Tcrit * Var
+        
+        print("IC: {:.3f} ± {:.3f}".format(YnoPonto , e0))
+        print("IC: [{:.3f}, {:.3f}]".format(YnoPonto - e0, YnoPonto + e0))
+
+        r = Sxy / np.sqrt(Sxx * Syy)
+        print("r = {:.3f}".format(r))
+        print("R² = {:.3f}".format(r**2))
+
+
+        print("Teste de Hipótese para a regressão")
+        Tb1calc = r * np.sqrt((n-2) / (1-r**2))
+        print("Tcalc = {:.3f}".format(Tb1calc))
+        print("Tcrit = {:.3f}".format(Tcrit))
+        if -Tcrit < Tb1calc < Tcrit:
+            return print("Rejeito H0, não há regressão")
+        else:
+            return print("Aceito H0, há regressão")
