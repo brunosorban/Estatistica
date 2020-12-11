@@ -383,20 +383,20 @@ class Stat:
                 QM1 = SQ1 / gl1
                 QMR = SQR / glr
                 QMT = SQT / glt
-                F1crit = f.ppf(1 - self.alfa, gl1, glr)
+
             else:
-                Medias = []
+                temp = 0
                 Vars = []
                 SQR = 0
                 gl1 = len(multiDados) - 1
                 glr = -len(multiDados)
                 for k in range(len(multiDados)):
-                    Medias.append(np.mean(multiDados[k]))
                     Vars.append(np.var(multiDados[k], ddof=1))
-                    SQR += len(multiDados[k]) * Vars[k]
+                    SQR += (len(multiDados[k]) - 1) * Vars[k]
                     glr += len(multiDados[k])
+                    temp += np.mean(multiDados[k]) * len(multiDados[k])
                 glt = gl1 + glr
-                X = np.mean(Medias)
+                X = temp / (glr + len(multiDados))
                 SQT = 0
                 for k in range(len(multiDados)):
                     for n in range(len(multiDados[k])):
@@ -405,16 +405,41 @@ class Stat:
                 QM1 = SQ1 / gl1
                 QMR = SQR / glr
                 QMT = SQT / glt
-                F1crit = f.ppf(1 - self.alfa/2, gl1, glr)
 
+            
+
+            # else:
+            #     gl1 = len(multiDados)-1
+            #     glr = len(multiDados) * (len(multiDados[0])-1)
+            #     glt = len(multiDados[0]) * len(multiDados) - 1
+
+            #     SQR = 0
+            #     SQT = 0
+            #     temp = 0
+            #     for i in range(len(multiDados)):
+            #         media = np.mean(multiDados[i])
+            #         for j in range(len(multiDados[i])):
+            #             SQR += (multiDados[i][j] - media)**2
+            #             temp += multiDados[i][j]
+            #     X = temp / (glt + 1)
+            #     for i in range(len(multiDados)):
+            #         media = np.mean(multiDados[i])
+            #         for j in range(len(multiDados[i])):
+            #             SQT += (multiDados[i][j] - X)**2
+            #     SQ1 = SQT - SQR
+            #     QM1 = SQ1 / gl1
+            #     QMR = SQR / glr
+            #     QMT = SQT / glt
+
+            F1crit = f.ppf(1 - self.alfa, gl1, glr)
             F1calc = QM1 / QMR
             
             pVal = f.cdf(F1calc, gl1, glr)
 
 
-            print('| Fonte        SQ        gl          QM    |')
-            print('| Entre     {:.2f}     {:.0f}       {:.3f} |'.format(SQ1, gl1, QM1))
-            print('| Residual   {:.2f}    {:.0f}      {:.3f} |'.format(SQR, glr, QMR))
+            print('| Fonte        SQ      gl       QM    |')
+            print('| Entre      {:.2f}     {:.0f}       {:.3f} |'.format(SQ1, gl1, QM1))
+            print('| Residual   {:.2f}     {:.0f}      {:.3f} |'.format(SQR, glr, QMR))
             print('| Total      {:.2f}    {:.0f}      {:.3f} |'.format(SQT, glt, QMT))
             print()
             print("Fcalc = {:.3f}".format(F1calc))
@@ -428,6 +453,8 @@ class Stat:
             else:
                 print("Rejeito H0, as médias são diferentes")
                 return False
+        
+
 
         elif mode == 'doisFat':
             gl1 = n1 - 1
@@ -552,30 +579,59 @@ class Stat:
                 print("Rejeito H0.2, as médias de 2 são diferentes")
                 return (R1, False)
 
-    def TC(self):
+    def TC(self, SQ1 = None, SQR = None, SQT = None, QM1 = None, QMR = None, QMT = None, n = None):
         somaX = 0
         somaY = 0
         somaXY = 0
         somaX2 = 0
         somaY2 = 0
-        for i in range(len(self.A)):
-            somaX += self.A[i]
-            somaY += self.B[i]
-            somaXY += self.A[i] * self.B[i]
-            somaX2 += self.A[i]**2
-            somaY2 += self.B[i]**2
-        SXX = somaX2 - somaX**2 / self.Na
-        SYY = somaY2 - somaY**2 / self.Nb
-        SXY = somaXY - somaX * somaY / self.Na
+        if SQ1 or SQR or SQT or QM1 or QMR or QMT:
+            gl1 = 1
+            glr = n-2
+            glt = n-1
+            if not SQ1:
+                SQ1 = SQT - SQR
+            if not SQR:
+                SQR = SQT - SQ1
+            if not SQT:
+                SQT = SQ1 + SQR
+            if QM1:
+                SQ1 = QM1 * gl1
+            if QMR:
+                SQR = QMR * glr
+            if QMT:
+                SQT = QMT * glt
+            QM1 = SQ1 / gl1
+            QMR = SQR / glr
+            QMT = SQT / glt
+            
+            R2 = SQ1 / SQT
+            r = np.sqrt(R2)
+            print('| Fonte        SQ        gl          QM    |')
+            print('| Entre     {:.2f}     {:.0f}       {:.3f} |'.format(SQ1, gl1, QM1))
+            print('| Residual   {:.2f}    {:.0f}      {:.3f} |'.format(SQR, glr, QMR))
+            print('| Total      {:.2f}    {:.0f}      {:.3f} |'.format(SQT, glt, QMT))
+            print()
+            print('|r| = {:.3f}'.format(r))
+        else:
+            for i in range(len(self.A)):
+                somaX += self.A[i]
+                somaY += self.B[i]
+                somaXY += self.A[i] * self.B[i]
+                somaX2 += self.A[i]**2
+                somaY2 += self.B[i]**2
+            SXX = somaX2 - somaX**2 / self.Na
+            SYY = somaY2 - somaY**2 / self.Nb
+            SXY = somaXY - somaX * somaY / self.Na
 
-        r = SXY / np.sqrt(SXX * SYY)
-        R2 = r**2
+            r = SXY / np.sqrt(SXX * SYY)
+            R2 = r**2
 
-        print('r = {:.3f}'.format(r))
+            print('r = {:.3f}'.format(r))
         print('R² = {:.3f}'.format(R2))
 
-        tcalc = r * np.sqrt((self.Na - 2) / (1 - R2))
-        tcrit = t.ppf(1-self.alfa/2, self.Na - 2)
+        tcalc = r * np.sqrt((n - 2) / (1 - R2))
+        tcrit = t.ppf(1-self.alfa/2, n- 2)
 
         if abs(tcalc) > tcrit:
             print("Rejeito H0, há correlação linear")
@@ -584,38 +640,37 @@ class Stat:
             print("Aceito H0, não há correlação linear")
             return True
 
+    # def TC(self):
+    #     somaX = 0
+    #     somaY = 0
+    #     somaXY = 0
+    #     somaX2 = 0
+    #     somaY2 = 0
+    #     for i in range(len(self.A)):
+    #         somaX += self.A[i]
+    #         somaY += self.B[i]
+    #         somaXY += self.A[i] * self.B[i]
+    #         somaX2 += self.A[i]**2
+    #         somaY2 += self.B[i]**2
+    #     SXX = somaX2 - somaX**2 / self.Na
+    #     SYY = somaY2 - somaY**2 / self.Nb
+    #     SXY = somaXY - somaX * somaY / self.Na
 
-    def TC(self):
-        somaX = 0
-        somaY = 0
-        somaXY = 0
-        somaX2 = 0
-        somaY2 = 0
-        for i in range(len(self.A)):
-            somaX += self.A[i]
-            somaY += self.B[i]
-            somaXY += self.A[i] * self.B[i]
-            somaX2 += self.A[i]**2
-            somaY2 += self.B[i]**2
-        SXX = somaX2 - somaX**2 / self.Na
-        SYY = somaY2 - somaY**2 / self.Nb
-        SXY = somaXY - somaX * somaY / self.Na
+    #     r = SXY / np.sqrt(SXX * SYY)
+    #     R2 = r**2
 
-        r = SXY / np.sqrt(SXX * SYY)
-        R2 = r**2
+    #     print('r = {:.3f}'.format(r))
+    #     print('R² = {:.3f}'.format(R2))
 
-        print('r = {:.3f}'.format(r))
-        print('R² = {:.3f}'.format(R2))
+    #     tcalc = r * np.sqrt((self.Na - 2) / (1 - R2))
+    #     tcrit = t.ppf(1-self.alfa/2, self.Na - 2)
 
-        tcalc = r * np.sqrt((self.Na - 2) / (1 - R2))
-        tcrit = t.ppf(1-self.alfa/2, self.Na - 2)
-
-        if abs(tcalc) > tcrit:
-            print("Rejeito H0, há correlação linear")
-            return False
-        else:
-            print("Aceito H0, não há correlação linear")
-            return True
+    #     if abs(tcalc) > tcrit:
+    #         print("Rejeito H0, há correlação linear")
+    #         return False
+    #     else:
+    #         print("Aceito H0, não há correlação linear")
+    #         return True
         
         
 
