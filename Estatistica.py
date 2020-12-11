@@ -100,6 +100,26 @@ class Stat:
             else:
                 print("Rejeito H0")
                 return False
+        elif mode == "diffMed":
+            Zcalc = (self.Xa - self.Xb) / np.sqrt(self.Va / self.Na + self.Vb / self.Nb)
+            print("Zcalc = {:.3f}".format(Zcalc))
+            
+            if student == False:
+                Zcritmin = norm.ppf(self.alfa/2)
+                Zcritmax = norm.ppf(1- self.alfa/2)
+            else:
+                Zcritmin = t.ppf(self.alfa/2, self.Na + self.Nb - 1)
+                Zcritmax = t.ppf(1- self.alfa/2, self.Na + self.Nb - 1)
+            
+            print("Zcritmin = ", int(1000 * Zcritmin)/1000)
+            print("Zcritmax = ", int(1000 * Zcritmax)/1000)
+
+            if Zcritmin <= Zcalc <= Zcritmax:
+                print("Aceito H0")
+                return True
+            else:
+                print("Rejeito H0")
+                return False
 
         elif mode == 'diffMedEmp' or mode == "maiorMedEmp" or mode == "menorMedEmp":
             # Modo para diferença de dados emparelhados
@@ -176,8 +196,10 @@ class Stat:
         elif mode == "maiorVar":
             Quicalc = (self.Na - 1) * self.Va / cond
             Quicrit = chi2.ppf(1-self.alfa, self.Na-1)
+            pValor = chi2.cdf(Quicalc, self.Na -1)
             print("Quicalc = ", int(1000*(Quicalc))/1000)
             print("Quicritmax = ", int(1000*(Quicrit))/1000)
+            print("P-Valor = {:.3f}".format(1-pValor))
             if Quicalc < Quicrit:
                 print("Aceito H0")
                 return True
@@ -199,7 +221,28 @@ class Stat:
             else:
                 print("Rejeito H0")
                 return False
-    def pValor(self, mode = "media", cond = None):
+        elif mode == "diffProp":
+            if self.pla>1: self.pla /= self.Na
+            if self.plb>1: self.plb /= self.Nb
+
+            if student == False: Zcrit = norm.ppf(1-self.alfa/2)
+            else: Zcrit = t.ppf(1-self.alfa/2) 
+
+            pl = (self.Na * self.pla + self.Nb * self.plb) / (self.Na + self.Nb)
+            Var = pl * (1-pl) * (1/ self.Na + 1 / self.Nb)
+            Zcalc = (self.pla - self.plb)/np.sqrt(Var)
+            pValor = 1 - norm.cdf(Zcalc)
+            
+            print("Zcalc = {:.3f}".format(Zcalc))
+            print("Zcrit = {:.3f}".format(Zcrit))
+            print("P-Valor = {:.5f}".format(pValor))
+            if -Zcrit <= Zcalc <= Zcrit:
+                print("Aceito H0, as proporções são iguais")
+                return True
+            else:
+                print("Rejeito H0, as proporções não são iguais")
+                return False
+    def pValor(self, mode = "media", cond = None, student = False):
         '''Calcula o p-valor dadas as condições de entrada
             Mode: escolha do tipo de analise que esta sendo feita
             Cond: Condição inicial da comparação (por exemplo: mi=25)
@@ -220,6 +263,9 @@ class Stat:
             Zcalc = (cond - self.Xa) / np.sqrt(self.Va / self.Na)
             temp = norm.cdf(Zcalc)
 
+            if student == False: temp = norm.cdf(Zcalc)
+            else: temp = t.cdf(Zcalc, self.Na -1)
+
             print("Alfa = {:.3f}".format(100 * (1 - temp)), "%")
             return 1 - temp
 
@@ -239,7 +285,7 @@ class Stat:
             Zcalc = (self.pla - cond) / np.sqrt(cond * (1 - cond) / self.Na)
             temp = norm.cdf(Zcalc)
 
-            print("Alfa = ", int(1000*(1000 * (1 - temp)))/1000, "%")
+            print("Alfa = {:.3f} %".format(100*(1-temp)))
             return 1-temp
 
         else:
@@ -255,12 +301,13 @@ class Stat:
 
         return temp / N, N
 
-    def TA(self, A, B, mode = "poisson"):
+    def TA(self, A= None, B= None, lamb = None, mode = "poisson"):
         '''Realiza um teste de aderência dadas as condições de entrada
         Para o teste, A deve conter o número de trocas, defeitos, etc, e 
         B deve conter quantas vezez essa troca ou defeito ocorreu. Note que 
         é fundamental que haja compatibilidade perfeita entre as entradas'''
-
+        if self.A: A = self.A
+        if self.B: B = self.B
         if len(A) != len(B): return print("Entradas incompatíveis")
         X, N = self.calculateTA(A, B)
 
@@ -272,24 +319,40 @@ class Stat:
             Eiacc = 0
 
             # Generate the Expected number by the poisson model
-            for i in range(len(A)):
-                Eiacc += np.exp(-X) * X**A[i] / math.factorial(A[i]) * N
-                Oiacc += Oi[i]
-                
-                if i != (len(A)-1) and np.exp(-X) * X**A[i+1] / math.factorial(A[i+1]) * N >= 5:
-                    Chi2calc += (Oiacc - Eiacc)**2 / Eiacc
-                    n += 1
-                    Oiacc = 0
-                    Eiacc = 0
+            if not lamb:
+                for i in range(len(A)):
+                    Eiacc += np.exp(-X) * X**A[i] / math.factorial(A[i]) * N
+                    Oiacc += Oi[i]
+                    
+                    if i != (len(A)-1) and np.exp(-X) * X**A[i+1] / math.factorial(A[i+1]) * N >= 5:
+                        Chi2calc += (Oiacc - Eiacc)**2 / Eiacc
+                        n += 1
+                        Oiacc = 0
+                        Eiacc = 0
 
-            Chi2calc += (Oiacc - Eiacc)**2 / Eiacc
-            n += 1  
+                Chi2calc += (Oiacc - Eiacc)**2 / Eiacc
+                n += 1  
+
+            else:
+                for i in range(len(A)):
+                    Eiacc += np.exp(-lamb) * lamb**A[i] / math.factorial(A[i]) * N
+                    Oiacc += Oi[i]
+                    
+                    if i != (len(A)-1) and np.exp(-X) * X**A[i+1] / math.factorial(A[i+1]) * N >= 5:
+                        Chi2calc += (Oiacc - Eiacc)**2 / Eiacc
+                        n += 1
+                        Oiacc = 0
+                        Eiacc = 0
+
+                Chi2calc += (Oiacc - Eiacc)**2 / Eiacc
+                n += 1
+            print("Graus de Liberdade = {:.3f}".format(n-2))
                 
                 
             Chi2crit = chi2.ppf(1-self.alfa, n - 2)
         
-            print("Chi2calc = ", int(1000 * Chi2calc) / 1000)
-            print("Chi2crit = ", int(1000 * Chi2crit) / 1000)
+            print("Chi2calc = {:.3f}".format(Chi2calc))
+            print("Chi2crit = {:.3f}".format(Chi2crit))
             if Chi2calc < Chi2crit:
                 print("Aceito H0")
                 return True
@@ -297,36 +360,60 @@ class Stat:
                 print("Rejeito H0")
                 return False
 
-    def AV(self, SQ1 = None, n1 = None, SQ2 = None, n2 = None,  SQR = None, SQT = None, QM1 = None, QM2 = None, QMR = None, QMT = None, mode = 'multiMedia'):
+    def AV(self, multiDados = None, SQ1 = None, n1 = None, SQ2 = None, n2 = None,  SQR = None, SQT = None, QM1 = None, QM2 = None, QMR = None, QMT = None, mode = 'multiMedia'):
         if mode == 'multiMedia':
-            gl1 = n1 - 1
-            glr = n1 * (n2-1)
-            glt = n1 * n2 - 1
+            if not multiDados:
+                gl1 = n1 - 1
+                glr = n1 * (n2-1)
+                glt = n1 * n2 - 1
 
-            if QM1:
-                SQ1 = QM1 * gl1
-            if QMR:
-                SQR = QMR * glr
-            if QMT:
-                SQT = QMT * glt
-            if not SQ1:
+                if QM1:
+                    SQ1 = QM1 * gl1
+                if QMR:
+                    SQR = QMR * glr
+                if QMT:
+                    SQT = QMT * glt
+                if not SQ1:
+                    SQ1 = SQT - SQR
+                if not SQR:
+                    SQR = SQT - SQ1
+                if not SQT:
+                    SQT = SQ1 + SQR
+
+                QM1 = SQ1 / gl1
+                QMR = SQR / glr
+                QMT = SQT / glt
+                F1crit = f.ppf(1 - self.alfa, gl1, glr)
+            else:
+                Medias = []
+                Vars = []
+                SQR = 0
+                gl1 = len(multiDados) - 1
+                glr = -len(multiDados)
+                for k in range(len(multiDados)):
+                    Medias.append(np.mean(multiDados[k]))
+                    Vars.append(np.var(multiDados[k], ddof=1))
+                    SQR += len(multiDados[k]) * Vars[k]
+                    glr += len(multiDados[k])
+                glt = gl1 + glr
+                X = np.mean(Medias)
+                SQT = 0
+                for k in range(len(multiDados)):
+                    for n in range(len(multiDados[k])):
+                        SQT += (multiDados[k][n] - X)**2
                 SQ1 = SQT - SQR
-            if not SQR:
-                SQR = SQT - SQ1
-            if not SQT:
-                SQT = SQ1 + SQR
-
-            QM1 = SQ1 / gl1
-            QMR = SQR / glr
-            QMT = SQT / glt
+                QM1 = SQ1 / gl1
+                QMR = SQR / glr
+                QMT = SQT / glt
+                F1crit = f.ppf(1 - self.alfa/2, gl1, glr)
 
             F1calc = QM1 / QMR
-            F1crit = f.ppf(1 - self.alfa, gl1, glr)
+            
             pVal = f.cdf(F1calc, gl1, glr)
 
 
             print('| Fonte        SQ        gl          QM    |')
-            print('| Dado 1     {:.2f}     {:.0f}       {:.3f} |'.format(SQ1, gl1, QM1))
+            print('| Entre     {:.2f}     {:.0f}       {:.3f} |'.format(SQ1, gl1, QM1))
             print('| Residual   {:.2f}    {:.0f}      {:.3f} |'.format(SQR, glr, QMR))
             print('| Total      {:.2f}    {:.0f}      {:.3f} |'.format(SQT, glt, QMT))
             print()
@@ -341,7 +428,6 @@ class Stat:
             else:
                 print("Rejeito H0, as médias são diferentes")
                 return False
-
 
         elif mode == 'doisFat':
             gl1 = n1 - 1
