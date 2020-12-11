@@ -360,7 +360,7 @@ class Stat:
                 print("Rejeito H0")
                 return False
 
-    def AV(self, multiDados = None, SQ1 = None, n1 = None, SQ2 = None, n2 = None,  SQR = None, SQT = None, QM1 = None, QM2 = None, QMR = None, QMT = None, mode = 'multiMedia'):
+    def AV(self, multiDados = None, SQ1 = None, n1 = None, SQ2 = None, n2 = None,  SQI = None, repeticao = None, SQR = None, SQT = None, QM1 = None, QM2 = None, QMI = None, QMR = None, QMT = None, mode = 'multiMedia'):
         if mode == 'multiMedia':
             if not multiDados:
                 gl1 = n1 - 1
@@ -484,6 +484,74 @@ class Stat:
                 print("Rejeito H0.2, as médias de 2 são diferentes")
                 return (R1, False)
 
+        elif mode == 'doisFatRep':
+            gl1 = n1 - 1
+            gl2 = n2 - 1
+            gli = gl1 * gl2
+            glr = n1 * n2 * (repeticao - 1)
+            glt = n1 * n2 * repeticao - 1
+
+            if QM1:
+                SQ1 = QM1 * gl1
+            if QM2:
+                SQ2 = QM2 * gl2
+            if QMI:
+                SQI = QMI * gli
+            if QMR:
+                SQR = QMR * glr
+            if QMT:
+                SQT = QMT * glt
+            if not SQ1:
+                SQ1 = SQT - SQR - SQ2 - SQI
+            elif not SQ2:
+                SQ2 = SQT - SQR - SQ1 - SQI
+            elif not SQI:
+                SQI = SQT - SQR - SQ1 - SQ2
+            elif not SQR:
+                SQR = SQT - SQ1 - SQ2 - SQI
+            elif not SQT:
+                SQT = SQ1 + SQ2 + SQR - SQI
+
+            QM1 = SQ1 / gl1
+            QM2 = SQ2 / gl2
+            QMI = SQI / gli
+            QMR = SQR / glr
+            QMT = SQT / glt
+
+            F1calc = QM1 / QMR
+            F2calc = QM2 / QMR
+            F12calc = QMI / QMR
+
+            F1crit = f.ppf(1 - self.alfa, gl1, glr)
+            F2crit = f.ppf(1 - self.alfa, gl2, glr)
+            F12crit = f.ppf(1 - self.alfa, gli, glr)
+
+            pVal1 = 1 - f.cdf(F1calc, gl1, glr)
+            pVal2 = 1 - f.cdf(F2calc, gl2, glr)
+            pVal12 = 1 - f.cdf(F12calc, gli, glr)
+
+            print('| Fonte       SQ          gl        QM          F        Fcrit      p-Valor|')
+            print('| Dado 1      {:.2f}       {:.0f}       {:.3f}  {:.3f}  {:.3f}     {:.4f} |'.format(SQ1, gl1, QM1, F1calc, F1crit, pVal1))
+            print('| Dado 2      {:.2f}        {:.0f}       {:.3f}   {:.3f}   {:.3f}     {:.4f} |'.format(SQ2, gl2, QM2, F2calc, F2crit, pVal2))
+            print('| Interação   {:.2f}         {:.0f}       {:.3f}     {:.3f}    {:.3f}     {:.4f} |'.format(SQI, gli, QMI, F12calc, F12crit, pVal12))
+            print('| Residual    {:.2f}         {:.0f}      {:.3f} |'.format(SQR, glr, QMR))
+            print('| Total       {:.2f}       {:.0f}      {:.3f} |'.format(SQT, glt, QMT))
+            print()
+
+            if F1calc < F1crit:
+                print("Aceito H0.1, as médias de 1 são iguais")
+                R1 = True
+            else:
+                print("Rejeito H0.1, as médias de 1 são diferentes")
+                R1 = False
+            
+            if F2calc < F2crit:
+                print("Aceito H0.2, as médias de 2 são iguais")
+                return (R1, True)
+            else:
+                print("Rejeito H0.2, as médias de 2 são diferentes")
+                return (R1, False)
+
     def TC(self):
         somaX = 0
         somaY = 0
@@ -515,6 +583,41 @@ class Stat:
         else:
             print("Aceito H0, não há correlação linear")
             return True
+
+
+    def TC(self):
+        somaX = 0
+        somaY = 0
+        somaXY = 0
+        somaX2 = 0
+        somaY2 = 0
+        for i in range(len(self.A)):
+            somaX += self.A[i]
+            somaY += self.B[i]
+            somaXY += self.A[i] * self.B[i]
+            somaX2 += self.A[i]**2
+            somaY2 += self.B[i]**2
+        SXX = somaX2 - somaX**2 / self.Na
+        SYY = somaY2 - somaY**2 / self.Nb
+        SXY = somaXY - somaX * somaY / self.Na
+
+        r = SXY / np.sqrt(SXX * SYY)
+        R2 = r**2
+
+        print('r = {:.3f}'.format(r))
+        print('R² = {:.3f}'.format(R2))
+
+        tcalc = r * np.sqrt((self.Na - 2) / (1 - R2))
+        tcrit = t.ppf(1-self.alfa/2, self.Na - 2)
+
+        if abs(tcalc) > tcrit:
+            print("Rejeito H0, há correlação linear")
+            return False
+        else:
+            print("Aceito H0, não há correlação linear")
+            return True
+        
+        
 
     def regressao(self, xEmAnalise, n=None, somaX=None, somaX2=None, somaY=None, somaY2=None, somaXY=None, mode = "previsao", Var = None):
         X = somaX / n
