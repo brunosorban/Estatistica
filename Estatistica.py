@@ -301,7 +301,7 @@ class Stat:
 
         return temp / N, N
 
-    def TA(self, A= None, B= None, lamb = None, mode = "poisson"):
+    def TA(self, A= None, B= None, lamb = None, mode = "poisson", media = None, desvpad = None, n=None):
         '''Realiza um teste de aderência dadas as condições de entrada
         Para o teste, A deve conter o número de trocas, defeitos, etc, e 
         B deve conter quantas vezez essa troca ou defeito ocorreu. Note que 
@@ -309,9 +309,10 @@ class Stat:
         if self.A: A = self.A
         if self.B: B = self.B
         if len(A) != len(B): return print("Entradas incompatíveis")
-        X, N = self.calculateTA(A, B)
+        
 
         if mode == "poisson":
+            X, N = self.calculateTA(A, B)
             Oi = B
             Chi2calc = 0
             n = 0
@@ -350,6 +351,38 @@ class Stat:
                 
                 
             Chi2crit = chi2.ppf(1-self.alfa, n - 2)
+        
+            print("Chi2calc = {:.3f}".format(Chi2calc))
+            print("Chi2crit = {:.3f}".format(Chi2crit))
+            if Chi2calc < Chi2crit:
+                print("Aceito H0")
+                return True
+            else:
+                print("Rejeito H0")
+                return False
+
+        if mode == "normal":
+            Oi = B
+            Chi2calc = 0
+            n = 0
+            Oiacc = 0
+            Eiacc = 0
+
+            # Generate the Expected number by the poisson model
+
+            for i in range(len(A)):
+                Eiacc += (norm.cdf(A[i][0] - A[i][1])) * n
+                Oiacc += Oi[i]
+
+            Chi2calc += (Oiacc - Eiacc)**2 / Eiacc
+            n += 1  
+
+            Chi2calc += (Oiacc - Eiacc)**2 / Eiacc
+            n += 1
+            print("Graus de Liberdade = {:.3f}".format(6))
+                
+                
+            Chi2crit = chi2.ppf(1-self.alfa, 6)
         
             print("Chi2calc = {:.3f}".format(Chi2calc))
             print("Chi2crit = {:.3f}".format(Chi2crit))
@@ -631,7 +664,9 @@ class Stat:
         print('R² = {:.3f}'.format(R2))
 
         tcalc = r * np.sqrt((n - 2) / (1 - R2))
+        print("Tcalc = {:.3f}".format(tcalc))
         tcrit = t.ppf(1-self.alfa/2, n- 2)
+        print("Tcrit = {:.3f}".format(tcrit))
 
         if abs(tcalc) > tcrit:
             print("Rejeito H0, há correlação linear")
@@ -698,8 +733,8 @@ class Stat:
         Tcrit = abs(t.ppf(self.alfa / 2, n-2))
         # print("T = ", Tcrit)
         YnoPonto = b0 + b1 * xEmAnalise
-        e0 = Tcrit * Sr * varParcial if not Var else Tcrit * Var
-        
+        # e0 = Tcrit * Sr * varParcial if not Var else Tcrit * Var
+        e0 = Tcrit * Sr / np.sqrt(Sxx)
         print("IC: {:.3f} ± {:.3f}".format(YnoPonto , e0))
         print("IC: [{:.3f}, {:.3f}]".format(YnoPonto - e0, YnoPonto + e0))
 
